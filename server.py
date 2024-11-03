@@ -1,6 +1,7 @@
 import socket
 import threading
 import json
+import queue
 
 class Server:
     def __init__(self, address, port, max_connections=10):
@@ -9,6 +10,7 @@ class Server:
         self.address = address
         self.max_connections = max_connections
         self.clients = {}
+        self.message_queue = queue.Queue()
 
     def start(self):
         """
@@ -18,6 +20,16 @@ class Server:
         self.server.bind((self.address, self.port))
         self.server.listen(self.max_connections)
         print(f'Server is listening for {self.max_connections} connections on {self.address}:{self.port}')
+        threading.Thread(target=self.process_messages,daemon=True)
+
+    
+    def process_messages(self):
+        while True:
+            message = self.message_queue.get()
+            print(message)
+            if message:
+                self.broadcast(message)
+                self.message_queue.task_done()
 
     def handle_client(self, client_socket, client_address):
         """
@@ -34,15 +46,16 @@ class Server:
             while True:
                 message = client_socket.recv(1024).decode('utf-8')
                 if message:
-                    print(f"Received from {client_address}: {message}")
-                    # Broadcast the message to all other clients
-                    self.broadcast({"client":{client_address},"message": {message}}, exclude_client=client_address)
+                    # print(f"Received from {client_address}: {message}")
+                    self.message_queue.put(f'{client_address}:{message}')
+                    # self.broadcast({"client":{client_address},"message": {message}}, exclude_client=client_address)
                 # else:
                 #     # If message is empty, the client has disconnected
                 #     break
         except socket.timeout:
             print('client is inactive')
-            self.broadcast({"client":client_address, "message": "Client disconnected"}, exclude_client=client_address)
+            self.message_queue.put(f"{client_address}: {message}")
+            # self.broadcast(, exclude_client=client_address)
 
 
         except Exception as e:
@@ -71,12 +84,10 @@ class Server:
         """
         Accept incoming connections and spawn a new thread for each client.
         """
-        waiting = True
-        while waiting:
+        while True:
             try:
                 client_socket, client_address = self.server.accept()
                 print(f'Client connected: {client_address}')
-                print(self.clients)
                 
                 # Start a new thread to handle the client
                 client_thread = threading.Thread(target=self.handle_client, args=(client_socket, client_address))
@@ -84,11 +95,12 @@ class Server:
                 
             except KeyboardInterrupt:
                 print('Server shutting down.')
-                self.close()
-                # break
-                waiting = False
             except Exception as e:
                 print(f"There was a connection error: {e}")
+            finally:
+                break
+                self.close()
+
 
     def close(self):
         """
