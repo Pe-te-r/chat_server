@@ -1,6 +1,6 @@
 import socket
 import threading
-import json
+# import json
 import queue
 
 class Server:
@@ -11,6 +11,7 @@ class Server:
         self.max_connections = max_connections
         self.clients = {}
         self.message_queue = queue.Queue()
+        self.lock = threading.Lock()
 
     def start(self):
         """
@@ -20,47 +21,48 @@ class Server:
         self.server.bind((self.address, self.port))
         self.server.listen(self.max_connections)
         print(f'Server is listening for {self.max_connections} connections on {self.address}:{self.port}')
-        threading.Thread(target=self.process_messages,daemon=True)
+        
+        # Start the message processing thread
+        threading.Thread(target=self.process_messages, daemon=True).start()
 
-    
     def process_messages(self):
         while True:
             message = self.message_queue.get()
+            if message is None:  # Exit the loop if None is received
+                break
+                # pass
             print(message)
-            if message:
-                self.broadcast(message)
-                self.message_queue.task_done()
+            # self.broadcast(message)  # Send the message to all clients
+            self.message_queue.task_done()
 
     def handle_client(self, client_socket, client_address):
         """
         Handle communication with a single client, continuously waiting for messages.
         """
         # Add the client to the clients dictionary
-        self.clients[client_address] = client_socket
-        print(f'Client {client_address} connected. Total clients: {len(self.clients)}')
+        with self.lock:
+            self.clients[client_address] = client_socket
+            print(f'Client {client_address} connected. Total clients: {len(self.clients)}')
 
-        client_socket.settimeout(10) 
+        client_socket.settimeout(10)
 
         try:
             # Continuous loop to listen for messages from the client
             while True:
-                message = client_socket.recv(1024).decode('utf-8')
-                if message:
-                    # print(f"Received from {client_address}: {message}")
-                    self.message_queue.put(f'{client_address}:{message}')
-                    # self.broadcast({"client":{client_address},"message": {message}}, exclude_client=client_address)
-                # else:
-                #     # If message is empty, the client has disconnected
-                #     break
-        except socket.timeout:
-            print('client is inactive')
-            self.message_queue.put(f"{client_address}: {message}")
-            # self.broadcast(, exclude_client=client_address)
-
-
+                try:
+                    message = client_socket.recv(1024).decode('utf-8')
+                    if message:
+                        # Process the received message
+                        self.message_queue.put(f'{client_address}: {message}')
+                    else:
+                        # If message is empty, the client has disconnected
+                        break
+                        # pass
+                except socket.timeout:
+                    print(f'Client {client_address} timed out.')
+                    break
         except Exception as e:
             print(f"Error handling client {client_address}: {e}")
-        
         
         finally:
             # Remove the client from the clients dictionary on disconnect
@@ -72,11 +74,10 @@ class Server:
         """
         Send a message to all connected clients, optionally excluding one client.
         """
-        json_dump = json.dumps(message)
         for client_address, client_socket in self.clients.items():
             if client_address != exclude_client:  # Optional exclusion of the sender
                 try:
-                    client_socket.sendall(json_dump.encode('utf-8'))
+                    client_socket.sendall(message.encode('utf-8'))
                 except Exception as e:
                     print(f"Error sending message to {client_address}: {e}")
 
@@ -95,21 +96,23 @@ class Server:
                 
             except KeyboardInterrupt:
                 print('Server shutting down.')
-            except Exception as e:
-                print(f"There was a connection error: {e}")
-            finally:
-                break
                 self.close()
-
+                break
+            except Exception as e:
+                self.close()
+                print(f"There was a connection error: {e}")
 
     def close(self):
         """
         Close the server socket and disconnect all clients.
         """
         # Close all active client connections
-        for client_address, client_socket in self.clients.items():
-            client_socket.close()
-            print(f"Client {client_address} forcibly disconnected.")
+        with self.lock:
+            if not self.clients:
+                return
+            for client_address, client_socket in self.clients.items():
+                client_socket.close()
+                print(f"Client {client_address} forcibly disconnected.")
         
         if self.server:
             self.server.close()
@@ -117,7 +120,7 @@ class Server:
 
 # Usage example
 if __name__ == "__main__":
-    server = Server('192.168.0.109', 55127)
+    server = Server('192.168.0.109', 65124)
     server.start()
     server.wait_connections()
     server.close()
