@@ -1,5 +1,6 @@
 import socket
 import threading
+import json
 
 class Server:
     def __init__(self, address, port, max_connections=10):
@@ -7,7 +8,7 @@ class Server:
         self.port = port
         self.address = address
         self.max_connections = max_connections
-        self.clients = {}  # Dictionary to track connected clients
+        self.clients = {}
 
     def start(self):
         """
@@ -26,6 +27,8 @@ class Server:
         self.clients[client_address] = client_socket
         print(f'Client {client_address} connected. Total clients: {len(self.clients)}')
 
+        client_socket.settimeout(10) 
+
         try:
             # Continuous loop to listen for messages from the client
             while True:
@@ -33,13 +36,18 @@ class Server:
                 if message:
                     print(f"Received from {client_address}: {message}")
                     # Broadcast the message to all other clients
-                    self.broadcast(f"{client_address}: {message}", exclude_client=client_address)
+                    self.broadcast({"client":{client_address},"message": {message}}, exclude_client=client_address)
                 # else:
                 #     # If message is empty, the client has disconnected
                 #     break
-                
+        except socket.timeout:
+            print('client is inactive')
+            self.broadcast({"client":client_address, "message": "Client disconnected"}, exclude_client=client_address)
+
+
         except Exception as e:
             print(f"Error handling client {client_address}: {e}")
+        
         
         finally:
             # Remove the client from the clients dictionary on disconnect
@@ -51,10 +59,11 @@ class Server:
         """
         Send a message to all connected clients, optionally excluding one client.
         """
+        json_dump = json.dumps(message)
         for client_address, client_socket in self.clients.items():
             if client_address != exclude_client:  # Optional exclusion of the sender
                 try:
-                    client_socket.sendall(message.encode('utf-8'))
+                    client_socket.sendall(json_dump.encode('utf-8'))
                 except Exception as e:
                     print(f"Error sending message to {client_address}: {e}")
 
