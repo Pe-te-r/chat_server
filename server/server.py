@@ -1,6 +1,7 @@
 import socket
 import threading
 import queue
+from time import sleep
 from message_client import Message
 from client_server import Client
 
@@ -14,6 +15,8 @@ class Server:
         self.message_queue = queue.Queue()
         self.lock = threading.Lock()
         self.running = True 
+        self.server_udp=None
+        self.udp_port = 60123
 
 
     def start(self):
@@ -24,10 +27,30 @@ class Server:
         self.server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.server.bind((self.address, self.port))
         self.server.listen(self.max_connections)
+        if self.server_udp is None:
+            self.server_udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            # self.server_udp.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            self.server_udp.bind((self.address, self.udp_port))   
+            print(f'UDP Server listening on {self.server_udp}:{self.udp_port}')
+
         print(f'Server is listening for {self.max_connections} connections on {self.address}:{self.port}')
         
         # Start the message processing thread
         threading.Thread(target=self.process_messages, daemon=True).start()
+        threading.Thread(target=self.ping,daemon=True).start()
+    
+    def ping(self):
+        while self.running:
+            try:
+                if self.server_udp is not None:
+                    message, client_address = self.server_udp.recvfrom(1024)
+                    print(message.decode('utf-8'))
+
+                    if message.decode('utf-8') == 'ping':
+                        print('here')
+            except Exception as e:
+                print(e)
+
 
     def process_messages(self):
         while self.running:
@@ -45,6 +68,7 @@ class Server:
         Handle communication with a single client, continuously waiting for messages.
         """
         client = Client(client_address,client_socket)
+        print(client)
 
         with self.lock:
             self.clients[client_address] = client
@@ -83,7 +107,7 @@ class Server:
         for client_address, client_socket in self.clients.items():
             if client_address != exclude_client:  # Optional exclusion of the sender
                 try:
-                    client_socket.sendall(message.encode('utf-8'))
+                    client_socket.sendall(message)
                 except Exception as e:
                     print(f"Error sending message to {client_address}: {e}")
 
@@ -124,7 +148,9 @@ class Server:
 
 # Usage example
 if __name__ == "__main__":
-    server = Server('192.168.0.109', 65120)
+    server = Server('localhost', 65120)
     server.start()
     server.wait_connections()
+    while server.wait_connections():
+        sleep(1)
     server.close()
