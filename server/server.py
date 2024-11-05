@@ -2,6 +2,7 @@ import socket
 import threading
 import queue
 from time import sleep
+import json
 from message_client import Message
 from client_server import Client
 
@@ -44,10 +45,11 @@ class Server:
             try:
                 if self.server_udp is not None:
                     message, client_address = self.server_udp.recvfrom(1024)
-                    print(message.decode('utf-8'))
-
-                    if message.decode('utf-8') == 'ping':
-                        print('here')
+                    message = message.decode('utf-8')
+                    message = json.loads(message)
+                    # print(message)
+                    # if message.decode('utf-8') == 'ping':
+                    #     print('here')
             except Exception as e:
                 print(e)
 
@@ -56,6 +58,9 @@ class Server:
         while self.running:
             try:
                 message = self.message_queue.get()
+                if message.message['username']:
+                    client = self.clients[message.sender]
+                    client.username = message.message['username']
                 if message:
                     print(message.serialize())
                     # self.broadcast(message)  # Send the message to all clients
@@ -68,7 +73,6 @@ class Server:
         Handle communication with a single client, continuously waiting for messages.
         """
         client = Client(client_address,client_socket)
-        print(client)
 
         with self.lock:
             self.clients[client_address] = client
@@ -83,10 +87,14 @@ class Server:
             while handling:
                 try:
                     message = client_socket.recv(1024).decode('utf-8')
+                    message = json.loads(message)
+                    
+
                     if message:
                         msg= Message(client.client_address,message)
                         self.message_queue.put(msg)
                     else:
+                        # print(client)
                         continue
                 except socket.timeout:
                     print(f'Client {client_address} timed out.')
