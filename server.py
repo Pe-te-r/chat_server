@@ -22,6 +22,7 @@ class Server:
         Start the server, bind it to the address and port, and begin listening.
         """
         self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.server.bind((self.address, self.port))
         self.server.listen(self.max_connections)
         print(f'Server is listening for {self.max_connections} connections on {self.address}:{self.port}')
@@ -53,9 +54,9 @@ class Server:
 
         client_socket.settimeout(10)
 
-        handling = True
 
         try:
+            handling = True
             # Continuous loop to listen for messages from the client
             while handling:
                 try:
@@ -70,8 +71,7 @@ class Server:
                         # break
                 except socket.timeout:
                     print(f'Client {client_address} timed out.')
-                finally:
-                    handling = False
+                    handling=False
         except Exception as e:
             print(f"Error handling client {client_address}: {e}")
         
@@ -107,11 +107,12 @@ class Server:
                 client_thread.start()
                 
             except KeyboardInterrupt:
+                self.running = False
                 print('Server shutting down.')
             except Exception as e:
                 print(f"There was a connection error: {e}")
             finally:
-                self.running = False
+                pass
 
     def close(self):
         """
@@ -122,14 +123,15 @@ class Server:
                 for client_address, client_socket in self.clients.items():
                     client_socket.close()
                     print(f"Client {client_address} forcibly disconnected.")
-        
+            else:
+                print('no client now')
         if self.server:
             self.server.close()
             print("Server closed.")
 
 # Usage example
 if __name__ == "__main__":
-    server = Server('192.168.0.109', 65118)
+    server = Server('192.168.0.109', 65120)
     server.start()
     server.wait_connections()
-    # server.close()
+    server.close()
