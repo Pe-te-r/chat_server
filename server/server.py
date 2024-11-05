@@ -1,6 +1,5 @@
 import socket
 import threading
-# import json
 import queue
 from message_client import Message
 from client_server import Client
@@ -35,7 +34,6 @@ class Server:
             try:
                 message = self.message_queue.get()
                 if message:
-                    # print(message.message)
                     print(message.serialize())
                     # self.broadcast(message)  # Send the message to all clients
                 self.message_queue.task_done()
@@ -47,7 +45,7 @@ class Server:
         Handle communication with a single client, continuously waiting for messages.
         """
         client = Client(client_address,client_socket)
-        # Add the client to the clients dictionary
+
         with self.lock:
             self.clients[client_address] = client
             print(f'Client {client.client_address} connected. Total clients: {len(self.clients)}')
@@ -57,18 +55,15 @@ class Server:
 
         try:
             handling = True
-            # Continuous loop to listen for messages from the client
+
             while handling:
                 try:
                     message = client_socket.recv(1024).decode('utf-8')
                     if message:
-                        # Process the received message
                         msg= Message(client.client_address,message)
                         self.message_queue.put(msg)
                     else:
-                        # If message is empty, the client has disconnected
                         continue
-                        # break
                 except socket.timeout:
                     print(f'Client {client_address} timed out.')
                     handling=False
@@ -76,7 +71,6 @@ class Server:
             print(f"Error handling client {client_address}: {e}")
         
         finally:
-            # Remove the client from the clients dictionary on disconnect
             client =  self.clients[client_address]
             client.close()
             del self.clients[client_address]
@@ -102,7 +96,6 @@ class Server:
                 client_socket, client_address = self.server.accept()
                 print(f'Client connected: {client_address}')
                 
-                # Start a new thread to handle the client
                 client_thread = threading.Thread(target=self.handle_client, args=(client_socket, client_address))
                 client_thread.start()
                 
