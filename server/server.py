@@ -47,9 +47,11 @@ class Server:
                     message, client_address = self.server_udp.recvfrom(1024)
                     message = message.decode('utf-8')
                     message = json.loads(message)
-                    # print(message)
+                    user=message['username']
+                    print(self.clients[user])
+
+                    print('here')
                     # if message.decode('utf-8') == 'ping':
-                    #     print('here')
             except Exception as e:
                 print(e)
 
@@ -59,7 +61,7 @@ class Server:
             try:
                 message = self.message_queue.get()
                 if message.message['username']:
-                    client = self.clients[message.sender]
+                    client = self.clients[message.username]
                     client.username = message.message['username']
                 if message:
                     print(message.serialize())
@@ -75,10 +77,10 @@ class Server:
         client = Client(client_address,client_socket)
 
         with self.lock:
-            self.clients[client_address] = client
+            self.clients[client.username] = client
             print(f'Client {client.client_address} connected. Total clients: {len(self.clients)}')
 
-        client_socket.settimeout(10)
+        # client_socket.settimeout(10)
 
 
         try:
@@ -91,7 +93,7 @@ class Server:
                     
 
                     if message:
-                        msg= Message(client.client_address,message)
+                        msg= Message(client.client_address,message,client.username)
                         self.message_queue.put(msg)
                     else:
                         # print(client)
