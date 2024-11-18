@@ -1,9 +1,9 @@
 class Client:
-    def __init__(self, client_address, client_socket):
+    def __init__(self, client_address, client_socket,username=None):
         self.client_socket = client_socket
         self.udp_socket = None
         self.client_address = client_address
-        self.username = None
+        self.username = username
     
     def __repr__(self):
         return f'Client(Address: {self.client_address}, Username: {self.username})'

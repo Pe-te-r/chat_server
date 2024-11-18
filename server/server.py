@@ -48,10 +48,13 @@ class Server:
                     message = message.decode('utf-8')
                     message = json.loads(message)
                     user=message['username']
-                    print(self.clients[user])
+                    print('below here')
+                    # print(message)
+                    print(self.clients)
+                    # print(self.clients[user])
 
-                    print('here')
-                    # if message.decode('utf-8') == 'ping':
+                    # print('here')
+                    # # if message.decode('utf-8') == 'ping':
             except Exception as e:
                 print(e)
 
@@ -60,6 +63,7 @@ class Server:
         while self.running:
             try:
                 message = self.message_queue.get()
+                print(f'processing: {message}')
                 if message.message['username']:
                     client = self.clients[message.username]
                     client.username = message.message['username']
@@ -70,15 +74,25 @@ class Server:
             except queue.Empty:
                 continue
 
+
+    def add(self,client,username):
+                client.username=username
+                print(client)
+            # with self.lock:
+                print('client above')
+                print('username: ' + client)
+                self.clients[client.username] = client
+                print(f'Client {client.client_address} connected. Total clients: {len(self.clients)}')
     def handle_client(self, client_socket, client_address):
         """
         Handle communication with a single client, continuously waiting for messages.
         """
         client = Client(client_address,client_socket)
 
-        with self.lock:
-            self.clients[client.username] = client
-            print(f'Client {client.client_address} connected. Total clients: {len(self.clients)}')
+        list_add=False
+
+        
+                # list_add=True
 
         # client_socket.settimeout(10)
 
@@ -90,6 +104,12 @@ class Server:
                 try:
                     message = client_socket.recv(1024).decode('utf-8')
                     message = json.loads(message)
+                    print(message['username'])
+                    if message['username'] and not list_add:
+                        print('adding')
+                        self.add(client, message['username'])
+                        list_add=True
+                    print(f'message received: {message}')
                     
 
                     if message:
@@ -105,9 +125,9 @@ class Server:
             print(f"Error handling client {client_address}: {e}")
         
         finally:
-            client =  self.clients[client_address]
+            client =  self.clients[client.username]
             client.close()
-            del self.clients[client_address]
+            del self.clients[client.username]
             print(f'Client {client_address} disconnected. Total clients: {len(self.clients)}')
 
     def broadcast(self, message, exclude_client=None):
